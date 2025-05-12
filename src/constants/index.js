@@ -1,4 +1,6 @@
-export const API_URL = 'http://localhost:8080';
+export const API_URL = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')
+  ? 'http://localhost:8080'  // Dev
+  : 'http://104.155.165.75';  // Prod temporary
 
 
 export function capitalizeFirstLetterOfEachWord(str) {
