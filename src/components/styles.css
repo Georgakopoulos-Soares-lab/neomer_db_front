@@ -1,0 +1,22 @@
+/* =============================== NEOMERS ===============================*/
+.config-panel {
+    position: fixed;
+    top: 0;
+    right: -50%;
+    /* Initially hidden */
+    width: 50%;
+    height: 100%;
+    background: white;
+    border-left: 1px solid #ccc;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+    padding: 16px;
+    overflow: auto;
+    z-index: 50;
+    transition: right 0.3s ease-in-out;
+    /* Smooth slide effect */
+}
+
+.config-panel.show {
+    right: 0;
+    /* Slide into view */
+}

@@ -584,40 +584,6 @@ const PatientData = () => {
           >
             Visible Columns
           </button>
-          {/* NAfsika Changes /*}
-          {/* {showColumnDropdown && (
-            <div
-              className="absolute border border-gray-300 bg-white p-2 mt-1 z-50"
-              style={{ maxHeight: "200px", overflowY: "auto", width: "200px" }}
-            >
-              <div className="flex items-center mb-1">
-                <input
-                  type="checkbox"
-                  id="toggle-all"
-                  checked={visibleColumns.length === columns.length}
-                  onChange={e => toggleAllColumns(e.target.checked)}
-                  className="mr-2"
-                />
-                <label htmlFor="toggle-all" className="text-sm">
-                  Show All
-                </label>
-              </div>
-              {columns.map(column => (
-                <div key={column.key} className="flex items-center mb-1">
-                  <input
-                    type="checkbox"
-                    id={`toggle-${column.key}`}
-                    checked={visibleColumns.includes(column.key)}
-                    onChange={() => toggleColumn(column.key)}
-                    className="mr-2"
-                  />
-                  <label htmlFor={`toggle-${column.key}`} className="text-sm">
-                    {column.label}
-                  </label>
-                </div>
-              ))}
-            </div>
-          )} */}
           {showColumnDropdown && (
             <div
               className="border p-4 space-y-4 bg-gray-100 rounded shadow-sm absolute mt-1 z-50"
@@ -930,9 +896,8 @@ const PatientData = () => {
             {paginatedData.map((row, rowIndex) => (
               <tr
                 key={rowIndex}
-                className={`cursor-pointer transition-opacity ${
-                  rowIndex % 2 === 0 ? "bg-gray-100" : "bg-white"
-                } hover:opacity-80`}
+                className={`cursor-pointer transition-opacity ${rowIndex % 2 === 0 ? "bg-gray-100" : "bg-white"
+                  } hover:opacity-80`}
                 onClick={() => handleRowClick(row["icgc_donor_id"])}
                 onMouseEnter={e => handleRowMouseEnter(e, row)}
                 onMouseLeave={handleRowMouseLeave}

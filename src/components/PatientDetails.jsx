@@ -3,6 +3,16 @@ import React, { useState, useEffect } from "react"
 import { useParams, Link } from "react-router-dom"
 import axios from "axios"
 import * as Constants from "../constants"
+import {
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts"
+import Loader from './Loader'
+
+// Data rich patient DO38727
 
 const visibleColumnKeys = [
   "# donor_unique_id",
@@ -18,25 +28,38 @@ const visibleColumnKeys = [
   "tobacco_smoking_history_indicator",
   "tobacco_smoking_intensity",
   "alcohol_history",
-  "alcohol_history_intensity"
+  "alcohol_history_intensity",
+]
+
+const COLORS = [
+  "#8884d8",
+  "#8dd1e1",
+  "#82ca9d",
+  "#a4de6c",
+  "#d0ed57",
+  "#ffc658",
+  "#ff8042",
+  "#00C49F",
+  "#FFBB28",
+  "#FF8042",
 ]
 
 const PatientDetails = () => {
-  const { donorId } = useParams()  // The donorId from the URL
+  const { donorId } = useParams() // The donorId from the URL
   const [patientData, setPatientData] = useState(null)
   const [neomersData, setNeomersData] = useState([])
   const [patientLoading, setPatientLoading] = useState(false)
   const [neomersLoading, setNeomersLoading] = useState(false)
   const [analyzeLoading, setAnalyzeLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [analyzedNeomer , setAnalyzedNeomer] =  useState('(No Neomer Selected)')
+  const [analyzedNeomer, setAnalyzedNeomer] = useState('(No Neomer Selected)')
 
   // Parameters for Neomer Table
-  const [length, setLength] = useState(16)  // Default length is 16
-  const [topN, setTopN] = useState(10)      // Default top_n is 10
+  const [length, setLength] = useState(16) // Default length is 16
+  const [topN, setTopN] = useState(10) // Default top_n is 10
 
   // Search Neomer Parameter
-  const [searchNeomer, setSearchNeomer] = useState("")  // Search prefix
+  const [searchNeomer, setSearchNeomer] = useState("") // Search prefix
   const [debouncedSearchNeomer, setDebouncedSearchNeomer] = useState("")
 
   // Analyze Neomer Section (Real Data)
@@ -44,7 +67,8 @@ const PatientDetails = () => {
     totalNeomers: 0,
     distinctDonors: 0,
     distinctCancerTypes: 0,
-    distinctOrgans: 0
+    distinctOrgans: 0,
+    cancerBreakdown: [],
   })
 
   // Debounce the search input to avoid excessive API calls
@@ -108,7 +132,7 @@ const PatientDetails = () => {
       const params = {
         donor_id: id,
         length: len,
-        top_n: topNVal
+        top_n: topNVal,
       }
       if (searchPrefix.trim() !== "") {
         params.prefix = searchPrefix.trim()
@@ -131,7 +155,8 @@ const PatientDetails = () => {
         totalNeomers: 0,
         distinctDonors: 0,
         distinctCancerTypes: 0,
-        distinctOrgans: 0
+        distinctOrgans: 0,
+        cancerBreakdown: [],
       })
       setAnalyzedNeomer('(No Neomer Selected)')
     } catch (err) {
@@ -176,7 +201,18 @@ const PatientDetails = () => {
       //     "totalNeomers": 100,
       //     "distinctDonors": 20,
       //     "distinctCancerTypes": 5,
-      //     "distinctOrgans": 3
+      //     "distinctOrgans": 3,
+      //     "cancerBreakdown": [
+      //       {
+      //         "cancerType": "Type1",
+      //         "count": 50,
+      //         "organs": [
+      //           { "organ": "Organ1", "count": 30 },
+      //           { "organ": "Organ2", "count": 20 }
+      //         ]
+      //       },
+      //       // ...
+      //     ]
       //   }
       // }
       setAnalyzeData(resp.data.analysis)
@@ -187,6 +223,35 @@ const PatientDetails = () => {
       console.error(err)
     }
   }
+
+  // Prepare data for the multi-level pie chart
+  const getPieChartData = () => {
+    const { cancerBreakdown } = analyzeData
+    if (!cancerBreakdown || cancerBreakdown.length === 0) return { outer: [], inner: [] }
+
+    // Outer Layer: Cancer Types
+    const outer = cancerBreakdown.map((ct, index) => ({
+      name: ct.cancerType,
+      value: ct.count,
+      color: COLORS[index % COLORS.length],
+    }))
+
+    // Inner Layer: Organs (Simplified to only organ name)
+    let inner = []
+    cancerBreakdown.forEach((ct) => {
+      ct.organs.forEach((organ) => {
+        inner.push({
+          name: organ.organ, // Simplified to only organ name
+          value: organ.count,
+          color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        })
+      })
+    })
+
+    return { outer, inner }
+  }
+
+  const { outer, inner } = getPieChartData()
 
   if (patientLoading) {
     return (
@@ -272,7 +337,7 @@ const PatientDetails = () => {
               </div>
               <div>
                 <span className="font-medium text-gray-600">Cancer Organ: </span>
-                <span className="text-gray-800">{patientData["Cancer_Organ"] || "N/A"}</span>
+                <span className="text-gray-800">{patientData["Organ"] || "N/A"}</span>
               </div>
             </div>
           </div>
@@ -280,18 +345,18 @@ const PatientDetails = () => {
           {/* Neomers and Analyze Neomer Section */}
           <div className="flex flex-col md:flex-row gap-6">
             {/* Neomers Table Card (Left) */}
-            <div className="md:w-2/3 p-6 bg-white border border-gray-200 shadow-md rounded-lg">
+            <div className="md:w-1/2 p-4 bg-white border border-gray-200 shadow-md rounded-lg">
               <h3 className="text-2xl font-semibold mb-4 text-gray-800">Patient Neomers</h3>
 
               {/* Parameters for Neomers */}
-              <div className="flex flex-col md:flex-row gap-6 mb-4">
+              <div className="flex flex-col md:flex-row gap-4 mb-4">
                 {/* Length Selector */}
                 <div className="flex flex-col">
                   <label className="font-medium text-gray-600 mb-1">Neomer Length:</label>
                   <select
                     value={length}
                     onChange={handleLengthChange}
-                    className="border border-gray-300 px-3 py-2 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="border border-gray-300 px-2 py-1 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {Array.from({ length: 10 }, (_, i) => 11 + i).map((len) => (
                       <option key={len} value={len}>
@@ -309,7 +374,7 @@ const PatientDetails = () => {
                     value={topN}
                     min={1}
                     onChange={handleTopNChange}
-                    className="border border-gray-300 px-3 py-2 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-24"
+                    className="border border-gray-300 px-2 py-1 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-20"
                     placeholder="10"
                   />
                 </div>
@@ -322,37 +387,14 @@ const PatientDetails = () => {
                   type="text"
                   value={searchNeomer}
                   onChange={handleSearchNeomerChange}
-                  className="border border-gray-300 px-3 py-2 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="border border-gray-300 px-2 py-1 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Enter neomer prefix"
                 />
               </div>
 
               {/* Loader Above Neomers Table */}
               {neomersLoading && (
-                <div className="flex justify-center my-4">
-                  <div className="animate-spin h-6 w-6 text-blue-500">
-                    <svg
-                      className="h-full w-full"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      ></path>
-                    </svg>
-                  </div>
-                </div>
+                <Loader></Loader>
               )}
 
               {/* Neomers Table */}
@@ -360,14 +402,14 @@ const PatientDetails = () => {
                 <table className="min-w-full bg-white border border-gray-300 table-auto shadow-md">
                   <thead>
                     <tr className="bg-gray-100">
-                      <th className="p-3 border-b text-center text-left text-gray-700">Neomer</th>
-                      <th className="p-3 border-b text-center text-right text-gray-700">Count</th>
+                      <th className="p-2 border-b text-center text-left text-gray-700 text-sm">Neomer</th>
+                      <th className="p-2 border-b text-center text-right text-gray-700 text-sm">Count</th>
                     </tr>
                   </thead>
                   <tbody>
                     {!neomersLoading && neomersData.length === 0 && (
                       <tr>
-                        <td colSpan={2} className="p-4 text-center text-gray-600">
+                        <td colSpan={2} className="p-2 text-center text-gray-600 text-sm">
                           No neomers found.
                         </td>
                       </tr>
@@ -375,14 +417,13 @@ const PatientDetails = () => {
                     {neomersData.map((item, idx) => (
                       <tr
                         key={idx}
-                        className={`cursor-pointer ${
-                          idx % 2 === 0 ? "bg-gray-50" : "bg-white"
-                        } hover:bg-blue-50`}
+                        className={`cursor-pointer ${idx % 2 === 0 ? "bg-gray-50" : "bg-white"
+                          } hover:bg-blue-50`}
                         title="Analyze Neomer"
                         onClick={() => handleNeomerClick(item.neomer)}
                       >
-                        <td className="p-3 border-b text-center text-left text-gray-800">{item.neomer}</td>
-                        <td className="p-3 border-b text-center text-right text-gray-800">{item.count}</td>
+                        <td className="p-2 border-b text-center text-left text-gray-800 text-sm">{item.neomer}</td>
+                        <td className="p-2 border-b text-center text-right text-gray-800 text-sm">{item.count}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -391,8 +432,10 @@ const PatientDetails = () => {
             </div>
 
             {/* Analyze Neomer Section (Right) */}
-            <div className="md:w-1/3 p-6 bg-white border border-gray-200 shadow-md rounded-lg">
-              <h3 className="text-2xl font-semibold mb-4 text-gray-800">Analyze Neomer {analyzedNeomer}</h3>
+            <div className="md:w-1/2 p-6 bg-white border border-gray-200 shadow-md rounded-lg">
+              <h3 className="text-2xl font-semibold mb-4 text-gray-800">
+                Analyze Neomer {analyzedNeomer}
+              </h3>
 
               {/* Loader in Analyze Section */}
               {analyzeLoading ? (
@@ -438,6 +481,57 @@ const PatientDetails = () => {
                     <span className="font-medium text-gray-600">Found in Organs:</span>
                     <span className="text-gray-800">{analyzeData.distinctOrgans}</span>
                   </div>
+
+                  {/* Multi-Level Pie Chart */}
+                  {analyzeData.cancerBreakdown && analyzeData.cancerBreakdown.length > 0 && (
+                    <div className="mt-6 pb-6"> {/* Added padding-bottom for spacing */}
+                      <h4 className="text-xl font-semibold mb-2 text-gray-800">Cancer Types and Organs Distribution</h4>
+                      <ResponsiveContainer width="100%" height={350}> {/* Increased height */}
+                        <PieChart>
+                          {/* Outer Pie: Cancer Types */}
+                          <Pie
+                            data={outer}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={120} // Increased outerRadius
+                            fill="#8884d8"
+                            label={{
+                              position: 'outside',
+                              formatter: (value, entry) => entry.name,
+                              fontSize: 12,
+                              fill: '#333',
+                            }} // Labels outside without arrows
+                          >
+                            {outer.map((entry, index) => (
+                              <Cell key={`cell-outer-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+
+                          {/* Inner Pie: Organs */}
+                          <Pie
+                            data={inner}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={125} // Adjusted to accommodate labels
+                            outerRadius={160} // Increased outerRadius
+                            fill="#82ca9d"
+                          // No labels on inner pie
+                          >
+                            {inner.map((entry, index) => (
+                              <Cell key={`cell-inner-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+
+                          <Tooltip />
+                          {/* Removed Legend */}
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

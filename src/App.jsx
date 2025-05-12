@@ -7,8 +7,8 @@ import About from "./components/About"
 import DownloadDataset from "./components/DownloadDataset"
 import PatientDetails from "./components/PatientDetails"
 import Visualizations from "./components/Visualizations"
-
-
+import Exomes from "./components/Exomes"
+import Homepage from "./components/Homepage"
 
 const App = () => {
   return (
@@ -17,13 +17,14 @@ const App = () => {
         <Navbar />
         <div className="flex-1 p-10 overflow-auto">
           <Routes>
-            <Route path="/" element={<Neomers/>} />
+            <Route path="/" element={<Homepage />} />
             <Route path="/patient_data" element={<PatientData />} />
             <Route path="/about" element={<About />} />
             <Route path="/download" element={<DownloadDataset />} />
-            <Route path="/patient/:donorId" element={<PatientDetails />} /> 
-            <Route path="/visualizations" element={<Visualizations />} /> 
-
+            <Route path="/patient/:donorId" element={<PatientDetails />} />
+            <Route path="/visualizations" element={<Visualizations />} />
+            <Route path="/exomes" element={<Exomes />} />
+            <Route path="/genomes" element={<Neomers />} />
           </Routes>
         </div>
       </div>
