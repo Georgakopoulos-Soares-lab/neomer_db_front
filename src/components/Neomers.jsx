@@ -16,7 +16,7 @@ const defaultVisibleColumnsOrder = [
   "Organ",
   "Hugo_Symbol",
   "Variant_Classification",
-  "gc_content"
+  "AF"
 ];
 
 // Filter types for text-like columns
@@ -198,7 +198,14 @@ const Neomers = () => {
           // If you prefer inclusive, use >= and <=
           condition = `(gc_content > ${minVal} AND gc_content < ${maxVal})`;
         }
-      } else {
+      } 
+      else if (validAFValues.includes(af.columnKey) && af.type === "between" && af.value) {
+                const [rawMin, rawMax] = af.value.split(",");
+                const min = parseFloat(rawMin).toFixed(2);
+                const max = parseFloat(rawMax).toFixed(2);
+                condition = `("${af.columnKey}" >= ${min} AND "${af.columnKey}" <= ${max})`;
+      }
+      else {
         // Text filters (equals, notEquals, contains, etc.)
         // Detect if the value is numeric
         const col = `"${af.columnKey}"`; // Always quote the column name
@@ -400,36 +407,50 @@ const Neomers = () => {
   };
 
   // Update the updateAdditionalFilter function to reset dependent fields
-  const updateAdditionalFilter = (index, key, val) => {
-    setAdditionalFilters((prev) => {
-      const newFilters = [...prev];
-      const currentFilter = newFilters[index];
+// Inside your Neomers component:
 
-      // If column is changed, reset type and value
-      if (key === "columnKey") {
+const updateAdditionalFilter = (index, key, val) => {
+  setAdditionalFilters((prev) => {
+    const newFilters = [...prev];
+    const currentFilter = newFilters[index];
+
+    if (key === "columnKey") {
+      // If they pick an AF* column, force type="between" and full range
+      if (validAFValues.includes(val)) {
         newFilters[index] = {
           ...currentFilter,
           columnKey: val,
-          type: "", // Reset filter type
-          value: ""  // Reset value
+          type: "between",
+          value: "0.00,1.00",
         };
-      }
-      // If filter type is changed, reset value
-      else if (key === "type") {
+      } else {
+        // Otherwise reset type and value
         newFilters[index] = {
           ...currentFilter,
-          type: val,
-          value: ""  // Reset value
+          columnKey: val,
+          type: "",
+          value: "",
         };
       }
-      // Otherwise just update the field
-      else {
-        newFilters[index] = { ...currentFilter, [key]: val };
-      }
+    } else if (key === "type") {
+      // Changing filter type always resets the value
+      newFilters[index] = {
+        ...currentFilter,
+        type: val,
+        value: "",
+      };
+    } else {
+      // For all other keys (e.g. value or logicOp)
+      newFilters[index] = {
+        ...currentFilter,
+        [key]: val,
+      };
+    }
 
-      return newFilters;
-    });
-  };
+    return newFilters;
+  });
+};
+
 
 
   const removeAdditionalFilter = (index) => {
@@ -506,25 +527,6 @@ const Neomers = () => {
     updateAdditionalFilter(index, "value", value);
   };
 
-  const handleFilterBlur = (index) => {
-    const af = additionalFilters[index];
-    if (!af) return;
-    if (
-      [
-        "equals",
-        "notEquals",
-        "contains",
-        "notContains",
-        "starts",
-        "notStarts",
-        "ends",
-        "notEnds"
-      ].includes(af.type)
-    ) {
-      const val = typedValues[index] || "";
-      updateAdditionalFilter(index, "value", val);
-    }
-  };
 
   // ------------------ Pagination & Page Size ------------------
   const handlePageSizeChange = (e) => {
@@ -628,6 +630,19 @@ const Neomers = () => {
     setGroupByColumns((prev) => prev.filter((c) => c !== colKey));
   };
 
+
+    // AF‐ranges: update the min or max thumb
+  const handleAFSliderChange = (index, which, rawVal) => {
+    // rawVal is a string; ensure it’s formatted as “0.00”–“1.00”
+    const val = parseFloat(rawVal).toFixed(2)
+    const parts = additionalFilters[index].value.split(",")
+    const min = which === "min" ? val : parts[0] || "0.00"
+    const max = which === "max" ? val : parts[1] || "1.00"
+    // make sure min ≤ max
+    if (parseFloat(min) > parseFloat(max)) return
+    updateAdditionalFilter(index, "value", `${min},${max}`);
+  }
+
   // ------------------ Render ------------------
   return (
     <div className="relative p-4 space-y-4">
@@ -681,388 +696,333 @@ const Neomers = () => {
 
       {/* Side Configuration Panel */}
 
-      <div className={`config-panel ${showConfigPanel ? "show" : ""}`}>
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold">Neomer Configuration</h3>
-          <button className="text-lg" onClick={() => setShowConfigPanel(false)}>
-            <FaTimes size={16} />
-          </button>
-        </div>
 
-        {/* Select length */}
-        <div className="mb-4">
-          <label className="block mb-1 font-medium">Neomer Length:</label>
-          <select
-            className="border px-2 py-1 rounded bg-white hover:bg-gray-50 w-full"
-            value={selectedLength}
-            onChange={(e) => {
-              setSelectedLength(parseInt(e.target.value, 10));
-              setAdditionalFilters([]);
-              setCurrentPage(0);
-            }}
+<>
+  
+  {/* Backdrop */}
+  {showConfigPanel && (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 z-40"
+      onClick={() => setShowConfigPanel(false)}
+    />
+  )}
+
+  {/* Drawer */}
+  <aside
+    className={`
+      fixed top-0 right-0 h-full w-[50rem] bg-white z-50
+      transform ${showConfigPanel ? 'translate-x-0' : 'translate-x-full'}
+      transition-transform duration-300 ease-in-out
+      shadow-2xl overflow-y-auto
+    `}
+  >
+    {/* Header */}
+    <div className="p-6 flex items-center justify-between border-b">
+      <h3 className="text-xl font-semibold">Neomer Configuration</h3>
+      <button
+        className="text-gray-500 hover:text-gray-700 focus:outline-none"
+        onClick={() => setShowConfigPanel(false)}
+      >
+        <FaTimes size={20} />
+      </button>
+    </div>
+
+    <div className="p-6 space-y-6">
+      {/* Neomer Length */}
+      <div>
+        <label className="block text-sm font-medium mb-1">Neomer Length</label>
+        <select
+          className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          value={selectedLength}
+          onChange={e => {
+            setSelectedLength(+e.target.value);
+            setAdditionalFilters([]);
+            setCurrentPage(0);
+          }}
+        >
+          {lengthOptions.map(len => (
+            <option key={len} value={len}>{len}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Visible Columns */}
+      <div>
+        <button
+          className="w-full flex justify-between items-center bg-gradient-to-r from-blue-400 to-blue-500 text-white px-4 py-2 rounded-md hover:from-blue-500 hover:to-blue-600 focus:outline-none"
+          onClick={() => setShowColumnsDropdown(!showColumnsDropdown)}
+        >
+          <span>Visible Columns</span>
+          <svg
+            className={`w-5 h-5 transform transition-transform ${showColumnsDropdown ? 'rotate-180' : ''}`}
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
           >
-            {lengthOptions.map((len) => (
-              <option key={len} value={len}>
-                {len}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Visible Columns */}
-        <div className="mb-4">
-          <div className="relative">
-            <button
-              onClick={() => setShowColumnsDropdown(!showColumnsDropdown)}
-              className="w-full flex items-center justify-between text-left px-4 py-2 rounded bg-gradient-to-r from-blue-400 to-blue-500 text-white hover:from-blue-500 hover:to-blue-600"
-            >
-              <span>Visible Columns</span>
-              <svg
-                className={`w-4 h-4 transition-transform transform ${showColumnsDropdown ? "rotate-180" : "rotate-0"
-                  }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </button>
-            {showColumnsDropdown && (
-              <div
-                className="border p-1 space-y-4 bg-gray-100 rounded shadow-sm absolute mt-1 z-50 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200"
-                style={{ maxHeight: "200px", overflowY: "auto" }}
-              >
-                {/* Search Bar */}
-                <div className="flex items-center mb-2">
-                  <input
-                    type="text"
-                    placeholder="Search columns..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full border border-gray-300 rounded p-2 text-sm focus:outline-none focus:ring focus:ring-blue-200 "
-                  />
-                </div>
-
-                {/* Toggle All Checkbox */}
-                <div className="flex items-center gap-4 p-2 bg-white rounded border shadow-sm">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {showColumnsDropdown && (
+          <div className="mt-2 border rounded-md bg-gray-50 shadow p-4 max-h-64 overflow-auto">
+            <input
+              type="text"
+              placeholder="Search columns…"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full mb-3 px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+            <div className="flex items-center mb-3">
+              <input
+                id="toggle-all" type="checkbox"
+                checked={visibleColumns.length === columns.length && columns.length > 0}
+                onChange={e => toggleAllColumns(e.target.checked)}
+                className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="toggle-all" className="text-sm">Show All</label>
+            </div>
+            {columns
+              .filter(col => col.label.toLowerCase().includes(searchTerm.toLowerCase()))
+              .map(col => (
+                <div key={col.key} className="flex items-center mb-2">
                   <input
                     type="checkbox"
-                    id="toggle-all"
-                    checked={
-                      visibleColumns.length === columns.length && columns.length > 0
-                    }
-                    onChange={(e) => toggleAllColumns(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    id={`col-${col.key}`}
+                    checked={visibleColumns.includes(col.key)}
+                    onChange={() => toggleColumn(col.key)}
+                    className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
-                  <label htmlFor="toggle-all" className="text-sm">
-                    Show All
-                  </label>
+                  <label htmlFor={`col-${col.key}`} className="text-sm">{col.label}</label>
                 </div>
-
-                {/* Filtered Columns */}
-                {columns
-                  .filter((column) =>
-                    column.label.toLowerCase().includes(searchTerm.toLowerCase())
-                  )
-                  .map((column) => (
-                    <div key={column.key} className="flex items-center gap-4 p-2 bg-white rounded border shadow-sm hover:bg-gray-100"
-                    >
-                      <input
-                        type="checkbox"
-                        id={`toggle-${column.key}`}
-                        checked={visibleColumns.includes(column.key)}
-                        onChange={() => toggleColumn(column.key)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <label htmlFor={`toggle-${column.key}`} className="text-sm">
-                        {column.label}
-                      </label>
-                    </div>
-                  ))}
-              </div>
-            )}
-
+              ))}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Filters */}
-        <div className="mb-4">
+      {/* Filters */}
+      <div>
+        <div className="flex justify-between items-center mb-2">
+          <h4 className="font-medium">Filters</h4>
           <button
-            className="w-full flex items-center justify-between text-left px-4 py-2 rounded bg-gradient-to-r from-blue-400 to-blue-500 text-white hover:from-blue-500 hover:to-blue-600"
+            className="text-blue-600 hover:underline text-sm focus:outline-none"
             onClick={addFilter}
           >
-            Add Filter
+            + Add Filter
           </button>
+        </div>
+        {additionalFilters.length > 0 && (
+          <div className="space-y-4">
+            {additionalFilters.map((af, i) => {
+              const filterTypes = af.columnKey === "gc_content"
+                ? numericFilterTypes.concat(specialFilterTypes)
+                : validAFValues.includes(af.columnKey)
+                ? numericFilterTypeGreaterLess
+                : af.columnKey === "donor_age_at_diagnosis" ||
+                  af.columnKey === "donor_survival_time" ||
+                  af.columnKey === "donor_interval_of_last_followup"
+                ? numericFilterTypesGeneric.concat(specialFilterTypes)
+                : textFilterTypes.concat(specialFilterTypes);
 
-          {additionalFilters.length > 0 && (
-            <div className="border p-4 space-y-2 bg-gray-50 filter-columns-panel rounded shadow mt-2">
-              <div className="flex flex-col space-y-2">
-                {additionalFilters.map((af, i) => {
-                  const filterTypes =
-                    af.columnKey === "gc_content"
-                      ? numericFilterTypes.concat(specialFilterTypes)
-                      : af.columnKey === "donor_age_at_diagnosis" || af.columnKey === "donor_survival_time" || af.columnKey === "donor_interval_of_last_followup" ? numericFilterTypesGeneric.concat(specialFilterTypes) : validAFValues.includes(af.columnKey) ? numericFilterTypeGreaterLess : textFilterTypes.concat(specialFilterTypes);
+              const currentTypedValue = typedValues[i] ?? af.value;
 
-                  const currentTypedValue =
-                    typedValues[i] !== undefined ? typedValues[i] : af.value;
-
-                  return (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 flex-wrap relative"
+              return (
+                <div key={i} className="grid grid-cols-3 gap-3 items-end">
+                  {/* Column */}
+                  <div>
+                    <label className="text-xs text-gray-600">Column</label>
+                    <select
+                      className="w-full border rounded px-2 py-1 focus:ring-blue-300"
+                      value={af.columnKey}
+                      onChange={e => updateAdditionalFilter(i, "columnKey", e.target.value)}
                     >
-                      {/* Logic Operator if not the first filter */}
-                      {i > 0 && (
-                        <select
-                          className="border text-sm rounded px-1 py-0.5 bg-white hover:bg-gray-50"
-                          value={af.logicOp || "AND"}
-                          onChange={(e) =>
-                            updateAdditionalFilter(i, "logicOp", e.target.value)
-                          }
-                        >
-                          <option value="AND">AND</option>
-                          <option value="OR">OR</option>
-                        </select>
-                      )}
+                      <option value="">Select…</option>
+                      {columns.map(col => (
+                        <option key={col.key} value={col.key}>{col.label}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                      {/* Column selector */}
-                      <div className="relative">
-                        <div
-                          className="flex items-center justify-between border text-sm w-64 px-4 py-2 rounded bg-white hover:bg-gray-50 cursor-pointer"
-                          onClick={() => toggleDropdown(i)}
-                        >
-                          {af.columnKey ? columns.find((col) => col.key === af.columnKey)?.label : "Select column"}
-                          <svg
-                            className={`w-4 h-4 transition-transform transform ${dropdownStates[i] ? "rotate-180" : "rotate-0"
-                              }`}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                          </svg>
-                        </div>
-
-                        {dropdownStates[i] && (
-                          <div
-                            className="border p-1 space-y-4 bg-gray-100 rounded shadow-sm absolute mt-1 z-50"
-                            style={{ maxHeight: "200px", overflowY: "auto" }}
-                          >
-                            {/* Search Bar */}
-                            <div className="mb-2">
-                              <input
-                                type="text"
-                                placeholder="Search columns..."
-                                value={searchTermFilter}
-                                onChange={(e) => setSearchTermFilter(e.target.value)}
-                                className="w-full border border-gray-300 rounded p-1 text-sm focus:outline-none focus:ring focus:ring-blue-200"
-                              />
-                            </div>
-
-                            {/* Options List */}
-                            {columns
-                              .filter((col) =>
-                                col.label.toLowerCase().includes(searchTermFilter.toLowerCase())
-                              )
-                              .map((col) => (
-                                <div
-                                  key={col.key}
-                                  className="cursor-pointer px-2 py-1 bg-white rounded border shadow-sm hover:bg-gray-100 text-sm"
-                                  onClick={() => {
-                                    updateAdditionalFilter(i, "columnKey", col.key);
-                                    setTypedValues(prev => ({ ...prev, [i]: "" })); // Clear typed value
-                                    toggleDropdown(i); // Close the dropdown after selection
-                                  }}
-                                >
-                                  {col.label}
-                                </div>
-                              ))}
-
-                            {columns.filter((col) =>
-                              col.label.toLowerCase().includes(searchTermFilter.toLowerCase())
-                            ).length === 0 && (
-                                <div className="text-sm text-gray-500 px-2 py-1">No results found</div>
-                              )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Filter Type */}
+                  {/* Type */}
+                  <div>
+                    <label className="text-xs text-gray-600">Type</label>
+                    {validAFValues.includes(af.columnKey) ? (
+                      <select disabled className="w-full border rounded px-2 py-1 bg-gray-100 text-gray-500">
+                        <option value="between">Between</option>
+                      </select>
+                    ) : (
                       <select
-                        className="border text-sm rounded px-2 py-1 bg-white hover:bg-gray-50"
-                        value={af.type || ""} // Ensure it defaults to an empty string
-                        onChange={(e) => updateAdditionalFilter(i, "type", e.target.value)}
+                        className="w-full border rounded px-2 py-1 focus:ring-blue-300"
+                        value={af.type}
+                        onChange={e => updateAdditionalFilter(i, "type", e.target.value)}
                       >
-                        <option value="" disabled>Select filter type</option> {/* Default option */}
-                        {filterTypes.map((ft) => (
-                          <option key={ft.value} value={ft.value}>
-                            {ft.label}
-                          </option>
+                        <option value="">Select…</option>
+                        {filterTypes.map(ft => (
+                          <option key={ft.value} value={ft.value}>{ft.label}</option>
                         ))}
                       </select>
+                    )}
+                  </div>
 
-                      {/* GC_BETWEEN: 2 fields */}
-                      {af.type !== "at_least_X_distinct_patients" && af.columnKey === "gc_content" && (
-                        <>
-                          {/* A small text or tooltip: */}
-                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                            Example: 25.21,60.51
+                  {/* Value */}
+                  <div>
+                    <label className="text-xs text-gray-600">&nbsp;</label>
+                    {af.type === "gc_between" ? (
+                      <div className="flex space-x-2">
+                        <input
+                          type="number" placeholder="min"
+                          className="w-1/2 border rounded px-2 py-1 focus:ring-blue-300"
+                          value={af.value.split(",")[0] || ""}
+                          onChange={e => {
+                            const parts = af.value.split(",");
+                            parts[0] = e.target.value;
+                            updateAdditionalFilter(i, "value", parts.join(","));
+                          }}
+                        />
+                        <input
+                          type="number" placeholder="max"
+                          className="w-1/2 border rounded px-2 py-1 focus:ring-blue-300"
+                          value={af.value.split(",")[1] || ""}
+                          onChange={e => {
+                            const parts = af.value.split(",");
+                            parts[1] = e.target.value;
+                            updateAdditionalFilter(i, "value", parts.join(","));
+                          }}
+                        />
+                      </div>
+                    ) : af.type === "at_least_X_distinct_patients" ? (
+                      <input
+                        type="number" placeholder="Count ≥"
+                        className="w-full border rounded px-2 py-1 focus:ring-blue-300"
+                        value={currentTypedValue}
+                        onChange={e => handleFilterValueChange(i, e.target.value)}
+                        onBlur={() => updateAdditionalFilter(i, "value", currentTypedValue)}
+                      />
+                    ) : validAFValues.includes(af.columnKey) ? (
+                      /* AF range sliders */
+                      <div className="space-y-2">
+                      {(() => {
+                        const [minVal = "0.00", maxVal = "1.00"] = af.value.split(",");
+                        return (
+                          <div className="flex justify-between text-xs text-gray-700 mb-1">
+                            <span>Min: {parseFloat(minVal).toFixed(2)}</span>
+                            <span>Max: {parseFloat(maxVal).toFixed(2)}</span>
                           </div>
-                          <input
-                            className="border text-sm w-16 rounded px-1"
-                            type="number"
-                            placeholder="GC min"
-                            value={af.value.split(",")[0] || ""}
-                            onChange={(e) => {
-                              const parts = af.value.split(",");
-                              parts[0] = e.target.value;
-                              updateAdditionalFilter(i, "value", parts.join(","));
-                            }}
-                          />
-                          <input
-                            className="border text-sm w-16 rounded px-1"
-                            type="number"
-                            placeholder="GC max"
-                            value={af.value.split(",")[1] || ""}
-                            onChange={(e) => {
-                              const parts = af.value.split(",");
-                              // If there's no second part yet, create one
-                              if (parts.length < 2) parts.push("");
-                              parts[1] = e.target.value;
-                              updateAdditionalFilter(i, "value", parts.join(","));
-                            }}
-                          />
-                        </>
-                      )}
-
-                      {/* at_least_X_distinct_patients */}
-                      {af.type === "at_least_X_distinct_patients" && (
-                        <div className="flex items-center gap-2">
-                          <label className="text-sm">Count ≥</label>
-                          <input
-                            type="number"
-                            className="border text-sm rounded px-1 w-16"
-                            placeholder="X"
-                            value={currentTypedValue}
-                            onChange={(e) => handleFilterValueChange(i, e.target.value)}
-                            onBlur={() =>
-                              updateAdditionalFilter(i, "value", currentTypedValue)
-                            }
-                          />
-                        </div>
-                      )}
-
-                      {/* Otherwise, text filters */}
-                      {af.columnKey !== "gc_content" &&
-                        af.columnKey && (
-                          <div className="relative">
-                            <input
-                              className="border text-sm rounded px-1"
-                              type={af.columnKey === "donor_age_at_diagnosis" || af.columnKey === "donor_survival_time" || af.columnKey === "donor_interval_of_last_followup" ? "number" : "text"}
-                              placeholder="Value"
-                              value={currentTypedValue}
-                              onChange={(e) => handleFilterValueChange(i, e.target.value)}
-                              onBlur={() =>
-                                updateAdditionalFilter(i, "value", currentTypedValue)
-                              }
-                            />
-                            {suggestionOpenIndex === i && suggestions.length > 0 && (
-                              <div className="absolute bg-white border border-gray-300 z-50 text-sm w-full max-h-40 overflow-y-auto suggestions-dropdown">
-                                {suggestions.map((sugg, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="px-2 py-1 hover:bg-gray-200 cursor-pointer"
-                                    onMouseDown={() => handleSuggestionClick(i, sugg)}
-                                  >
-                                    {sugg}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                      {/* Remove filter */}
-                      <button
-                        className="text-red-500 text-sm underline"
-                        onClick={() => removeAdditionalFilter(i)}
-                      >
-                        Remove
-                      </button>
+                        );
+                      })()}
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={af.value.split(",")[0] || "0.00"}
+                        onChange={e => handleAFSliderChange(i, "min", e.target.value)}
+                      />
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={af.value.split(",")[1] || "1.00"}
+                        onChange={e => handleAFSliderChange(i, "max", e.target.value)}
+                      />
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )
-          }
-        </div>
+                    ) : (
+                      <div className="relative">
+                        <input
+                          type={["greaterThan","lessThan"].includes(af.type) ? "number" : "text"}
+                          className="w-full border rounded px-2 py-1 focus:ring-blue-300"
+                          placeholder="Enter value…"
+                          value={currentTypedValue}
+                          onChange={e => handleFilterValueChange(i, e.target.value)}
+                          onBlur={() => applyValueToFilter(i, currentTypedValue)}
+                        />
+                        {suggestionOpenIndex === i && suggestions.length > 0 && (
+                          <ul className="absolute top-full left-0 right-0 bg-white border rounded mt-1 max-h-32 overflow-auto z-10">
+                            {suggestions.map(sug => (
+                              <li
+                                key={sug}
+                                className="px-2 py-1 hover:bg-gray-100 cursor-pointer"
+                                onMouseDown={() => handleSuggestionClick(i, sug)}
+                              >
+                                {sug}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-        {/* Remove All Filters */}
+                  {/* Remove */}
+                  <button
+                    className="text-red-500 text-xs hover:underline"
+                    onClick={() => removeAdditionalFilter(i)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div className="mt-6 space-y-3">
         <button
-          className="w-full flex items-center justify-between text-left px-4 py-2 rounded bg-gradient-to-r from-blue-400 to-blue-500 text-white hover:from-blue-500 hover:to-blue-600 mb-4"
+          className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md focus:outline-none"
           onClick={removeAllFiltersHandler}
         >
-          Remove All Filters
+          Clear All Filters
         </button>
-
-        {/* Export CSV */}
         <button
-          className="w-full flex items-center justify-between text-left px-4 py-2 rounded bg-gradient-to-r from-blue-400 to-blue-500 text-white hover:from-blue-500 hover:to-blue-600 mb-4"
+          className="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-md focus:outline-none"
           onClick={handleExportCSV}
         >
-          Export Visible Rows as CSV
+          Export Selected CSV
         </button>
+      </div>
 
-        {/* Stats Configuration */}
-        <div className="border p-4 space-y-2 bg-gray-50 rounded shadow">
-          <h4 className="text-base font-semibold">Neomer Statistics Configuration</h4>
-
-          {/* Top N */}
-          <div className="flex items-center gap-2">
-            <label className="whitespace-nowrap">Top N:</label>
-            <input
-              type="number"
-              value={topN}
-              min={1}
-              className="border px-2 py-1 w-20"
-              onChange={(e) => setTopN(Number(e.target.value))}
-            />
-          </div>
-
-          {/* Add Group By */}
-          <div className="flex flex-wrap gap-2 items-center mt-2">
-            <span>Add Group By:</span>
-            <SelectWithSearch columns={columns} handleAddGroupBy={handleAddGroupBy} />
-          </div>
-
-          {/* Current Group Bys */}
+      {/* Statistics Configuration */}
+      <div className="pt-4 border-t">
+        <h4 className="text-base font-semibold mb-2">Stats Configuration</h4>
+        <div className="flex items-center mb-4">
+          <label className="mr-2">Top N:</label>
+          <input
+            type="number" min={1}
+            className="w-20 border rounded px-2 py-1 focus:ring-blue-300"
+            value={topN}
+            onChange={e => setTopN(Number(e.target.value))}
+          />
+        </div>
+        <div>
+          <label className="block mb-1">Group By:</label>
+          <SelectWithSearch columns={columns} handleAddGroupBy={handleAddGroupBy} />
           {groupByColumns.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2 items-center">
-              <span className="font-semibold">Current Group By:</span>
-              {groupByColumns.map((gbCol) => {
-                const colObj = columns.find((c) => c.key === gbCol);
+            <div className="flex flex-wrap gap-2 mt-2">
+              {groupByColumns.map(colKey => {
+                const col = columns.find(c => c.key === colKey);
                 return (
-                  <div
-                    key={gbCol}
-                    className="px-2 py-1 bg-blue-100 rounded flex items-center gap-2"
+                  <span
+                    key={colKey}
+                    className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full flex items-center"
                   >
-                    <span className="text-sm">{colObj?.label || gbCol}</span>
+                    {col?.label || colKey}
                     <button
-                      onClick={() => handleRemoveGroupBy(gbCol)}
-                      className="text-red-600 text-xs"
+                      onClick={() => handleRemoveGroupBy(colKey)}
+                      className="ml-1 text-red-600 focus:outline-none"
                     >
-                      x
+                      ×
                     </button>
-                  </div>
+                  </span>
                 );
               })}
             </div>
           )}
         </div>
-      </div >
+      </div>
+    </div>
+  </aside>
+</>
+
+
 
 
 

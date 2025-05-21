@@ -358,9 +358,9 @@ const PatientDetails = () => {
                     onChange={handleLengthChange}
                     className="border border-gray-300 px-2 py-1 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {Array.from({ length: 10 }, (_, i) => 11 + i).map((len) => (
-                      <option key={len} value={len}>
-                        {len}
+                    {Array.from({ length: 7 }, (_, i) => 11 + i).map(l => (
+                      <option key={l} value={l}>
+                        {l}
                       </option>
                     ))}
                   </select>
